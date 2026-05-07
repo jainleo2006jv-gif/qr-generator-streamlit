@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>QR Code Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --fg: #000000;
+    --bg: #ffffff;
+    --size: 280px;
+  }
+
+  html, body {
+    min-height: 100vh;
+    font-family: 'Rajdhani', sans-serif;
+    background: #06091a;
+    color: #e0f4ff;
+    overflow-x: hidden;
+  }
+
+  /* ── Background scene ── */
+  .scene-bg {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 30% 20%, #0d1f4a 0%, #06091a 65%);
+  }
+  .grid-floor {
+    position: fixed;
+    bottom: -10%; left: 50%;
+    transform: translateX(-50%) perspective(500px) rotateX(72deg);
+    width: 220vw; height: 160vh;
+    background-image:
+      linear-gradient(rgba(0,180,255,.1) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,180,255,.1) 1px, transparent 1px);
+    background-size: 56px 56px;
+    animation: gscroll 5s linear infinite;
+    z-index: 0;
+  }
+  @keyframes gscroll { to { background-position: 0 56px; } }
+
+  .orb { position: fixed; border-radius: 50%; filter: blur(90px); opacity: .28; z-index: 0; pointer-events: none; animation: drift 14s ease-in-out infinite alternate; }
+  .o1 { width: 480px; height: 480px; top: -140px; left: -140px; background: #0050c8; }
+  .o2 { width: 360px; height: 360px; bottom: -100px; right: -80px; background: #00b4ff; animation-delay: -5s; animation-duration: 10s; }
+  .o3 { width: 220px; height: 220px; top: 45%; right: 8%; background: #7b2fff; animation-delay: -8s; animation-duration: 18s; }
+  @keyframes drift { to { transform: translate(28px, 36px) scale(1.1); } }
+
+  .stars {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      radial-gradient(1px 1px at 15% 22%, rgba(255,255,255,.9) 0%, transparent 100%),
+      radial-gradient(1px 1px at 72% 8%,  rgba(255,255,255,.7) 0%, transparent 100%),
+      radial-gradient(1px 1px at 88% 55%, rgba(255,255,255,.8) 0%, transparent 100%),
+      radial-gradient(1px 1px at 33% 80%, rgba(255,255,255,.6) 0%, transparent 100%),
+      radial-gradient(1px 1px at 56% 38%, rgba(255,255,255,.9) 0%, transparent 100%),
+      radial-gradient(2px 2px at 44% 12%, rgba(0,200,255,.9)  0%, transparent 100%),
+      radial-gradient(2px 2px at 78% 88%, rgba(0,200,255,.7)  0%, transparent 100%);
+  }
+
+  /* ── Layout ── */
+  .page-wrap {
+    position: relative; z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    padding: 48px 20px 60px;
+  }
+
+  .card {
+    width: 100%; max-width: 560px;
+    padding: 40px 44px 48px;
+    background: linear-gradient(145deg, rgba(8,20,60,.88) 0%, rgba(4,10,28,.94) 100%);
+    border: 1px solid rgba(0,190,255,.22);
+    border-radius: 22px;
+    box-shadow:
+      0 0 0 1px rgba(0,190,255,.07),
+      0 12px 40px rgba(0,0,0,.65),
+      0 0 90px rgba(0,100,255,.1),
+      inset 0 1px 0 rgba(255,255,255,.05);
+    backdrop-filter: blur(28px);
+    position: relative;
+  }
+  .card::before {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: 22px;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(0,200,255,.35), rgba(120,50,255,.2), rgba(0,200,255,.08));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  h1 {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900;
+    font-size: 1.8rem;
+    letter-spacing: .04em;
+    background: linear-gradient(135deg, #00ccff 0%, #ffffff 50%, #a070ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 6px;
+  }
+  .subtitle { font-size: 1rem; color: rgba(160,210,255,.65); margin-bottom: 30px; }
+
+  /* ── Section heading ── */
+  .sec {
+    font-family: 'Orbitron', monospace;
+    font-size: .72rem;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: rgba(0,200,255,.6);
+    margin: 22px 0 10px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid rgba(0,200,255,.13);
+  }
+
+  /* ── Inputs ── */
+  label { font-size: .95rem; color: rgba(180,220,255,.8); display: block; margin-bottom: 5px; }
+
+  input[type=text], select {
+    width: 100%;
+    background: rgba(0,10,40,.7);
+    border: 1px solid rgba(0,190,255,.28);
+    border-radius: 11px;
+    color: #e0f4ff;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1rem;
+    padding: 13px 16px;
+    outline: none;
+    transition: border-color .25s, box-shadow .25s;
+  }
+  input[type=text]:focus, select:focus {
+    border-color: rgba(0,200,255,.7);
+    box-shadow: 0 0 28px rgba(0,200,255,.18);
+  }
+  input[type=text]::placeholder { color: rgba(100,160,220,.4); }
+  select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2300ccff' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+  select option { background: #06091a; }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+
+  /* Color pickers */
+  .color-wrap {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(0,10,40,.7);
+    border: 1px solid rgba(0,190,255,.28);
+    border-radius: 11px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: border-color .25s;
+  }
+  .color-wrap:hover { border-color: rgba(0,200,255,.55); }
+  input[type=color] {
+    width: 36px; height: 36px;
+    border: none; background: none;
+    cursor: pointer; padding: 0; border-radius: 6px;
+  }
+  .color-hex { font-size: .9rem; color: rgba(180,220,255,.7); font-family: 'Orbitron', monospace; letter-spacing: .06em; }
+
+  /* Slider */
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  input[type=range] { flex: 1; accent-color: #00ccff; cursor: pointer; height: 4px; }
+  .slider-val { font-size: .9rem; color: #00ccff; font-family: 'Orbitron', monospace; min-width: 28px; text-align: right; }
+
+  /* ── Button ── */
+  .gen-btn {
+    font-family: 'Orbitron', monospace;
+    font-weight: 700;
+    font-size: .82rem;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    width: 100%; padding: 15px;
+    border-radius: 12px;
+    border: 1px solid rgba(0,200,255,.5);
+    background: linear-gradient(135deg, rgba(0,80,200,.55) 0%, rgba(0,28,90,.8) 100%);
+    color: #00e5ff;
+    cursor: pointer;
+    margin-top: 26px;
+    transition: all .28s;
+    box-shadow: 0 0 28px rgba(0,150,255,.12), inset 0 1px 0 rgba(255,255,255,.07);
+  }
+  .gen-btn:hover {
+    border-color: rgba(0,230,255,.88); color: #fff;
+    box-shadow: 0 0 55px rgba(0,200,255,.32), 0 4px 20px rgba(0,0,0,.4);
+    transform: translateY(-2px);
+  }
+  .gen-btn:active { transform: translateY(0); }
+
+  /* ── Output ── */
+  #output-section { display: none; margin-top: 32px; text-align: center; }
+
+  .qr-3d-wrap {
+    perspective: 700px;
+    display: inline-block;
+  }
+  .qr-3d-inner {
+    transform: rotateX(12deg) rotateY(-10deg);
+    transform-style: preserve-3d;
+    animation: float3d 6s ease-in-out infinite;
+    filter: drop-shadow(0 20px 45px rgba(0,140,255,.4));
+    transition: filter .3s;
+  }
+  .qr-3d-inner:hover {
+    animation-play-state: paused;
+    filter: drop-shadow(0 28px 60px rgba(0,200,255,.55));
+  }
+  @keyframes float3d {
+    0%,100% { transform: rotateX(12deg) rotateY(-10deg) translateY(0); }
+    50%      { transform: rotateX(7deg)  rotateY(10deg)  translateY(-12px); }
+  }
+
+  #qr-box {
+    background: #fff;
+    border-radius: 14px;
+    padding: 16px;
+    display: inline-block;
+    border: 2px solid rgba(0,200,255,.25);
+    box-shadow:
+      0 0 0 1px rgba(0,200,255,.1),
+      0 0 60px rgba(0,150,255,.25),
+      inset 0 1px 0 rgba(255,255,255,.5);
+  }
+  #qr-box img, #qr-box canvas { border-radius: 6px; display: block; }
+
+  .qr-caption {
+    font-family: 'Orbitron', monospace;
+    font-size: .7rem;
+    letter-spacing: .1em;
+    color: rgba(0,200,255,.5);
+    margin-top: 14px;
+    text-transform: uppercase;
+  }
+
+  .dl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+  .dl-btn {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    font-size: .95rem;
+    letter-spacing: .06em;
+    padding: 12px;
+    border-radius: 11px;
+    border: 1px solid rgba(120,50,255,.5);
+    background: linear-gradient(135deg, rgba(60,0,160,.45) 0%, rgba(20,0,80,.7) 100%);
+    color: #c084fc;
+    cursor: pointer;
+    transition: all .28s;
+    text-decoration: none;
+    display: block;
+    text-align: center;
+  }
+  .dl-btn:hover { border-color: rgba(160,80,255,.85); color: #fff; box-shadow: 0 0 40px rgba(150,50,255,.28); transform: translateY(-2px); }
+
+  /* Warning */
+  .warn {
+    display: none;
+    margin-top: 10px;
+    background: rgba(80,30,0,.45);
+    border: 1px solid rgba(255,140,0,.3);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: .9rem;
+    color: rgba(255,190,100,.85);
+  }
+  .warn.show { display: block; }
+
+  /* Error */
+  .err {
+    display: none;
+    margin-top: 10px;
+    background: rgba(80,0,0,.45);
+    border: 1px solid rgba(255,80,80,.3);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: .9rem;
+    color: rgba(255,140,140,.85);
+  }
+  .err.show { display: block; }
+
+  /* Spinner */
+  .spinner { display: none; }
+  .spinner.show {
+    display: inline-block;
+    width: 22px; height: 22px;
+    border: 2px solid rgba(0,200,255,.2);
+    border-top-color: #00ccff;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="scene-bg"></div>
+<div class="grid-floor"></div>
+<div class="orb o1"></div>
+<div class="orb o2"></div>
+<div class="orb o3"></div>
+<div class="stars"></div>
+
+<div class="page-wrap">
+  <div class="card">
+
+    <h1>🔗 QR Generator</h1>
+    <p class="subtitle">Paste a link, customise colours, and get a 3D QR code instantly.</p>
+
+    <!-- URL -->
+    <div class="sec">🌐 Link</div>
+    <label for="url-input">Paste your URL</label>
+    <input type="text" id="url-input" placeholder="https://example.com" />
+    <div class="err" id="url-err">⚠ Please enter a valid URL before generating.</div>
+
+    <!-- Colours -->
+    <div class="sec">🎨 Colours</div>
+    <div class="row2">
+      <div>
+        <label>QR Colour (foreground)</label>
+        <label class="color-wrap" for="fg-pick">
+          <input type="color" id="fg-pick" value="#000000" />
+          <span class="color-hex" id="fg-hex">#000000</span>
+        </label>
+      </div>
+      <div>
+        <label>Background Colour</label>
+        <label class="color-wrap" for="bg-pick">
+          <input type="color" id="bg-pick" value="#ffffff" />
+          <span class="color-hex" id="bg-hex">#ffffff</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="sec">⚙️ Settings</div>
+    <div class="row2">
+      <div>
+        <label>QR Size — <span id="size-label">280</span>px</label>
+        <div class="slider-row">
+          <input type="range" id="size-range" min="160" max="400" value="280" step="20" />
+          <span class="slider-val" id="size-val">280</span>
+        </div>
+      </div>
+      <div>
+        <label>Error Correction</label>
+        <select id="ec-level">
+          <option value="L">L — Low (7%)</option>
+          <option value="M">M — Medium (15%)</option>
+          <option value="Q">Q — Quartile (25%)</option>
+          <option value="H" selected>H — High (30%)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Output format -->
+    <div class="sec">💾 Download Format</div>
+    <div class="row2">
+      <div>
+        <label>Format</label>
+        <select id="fmt">
+          <option value="png" selected>PNG (transparent support)</option>
+          <option value="jpeg">JPEG (smaller file)</option>
+        </select>
+      </div>
+      <div>
+        <label>3D Animation</label>
+        <select id="anim-style">
+          <option value="float">Float</option>
+          <option value="spin">Spin</option>
+          <option value="pulse">Pulse</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Generate -->
+    <button class="gen-btn" id="gen-btn">
+      <span class="spinner" id="spinner"></span>
+      ⬡ Generate QR Code
+    </button>
+
+    <!-- Output -->
+    <div id="output-section">
+      <div class="qr-3d-wrap">
+        <div class="qr-3d-inner" id="qr-3d-inner">
+          <div id="qr-box">
+            <div id="qr-render"></div>
+          </div>
+        </div>
+      </div>
+      <p class="qr-caption" id="qr-caption">Hover to pause · Scan to open</p>
+      <div class="dl-row">
+        <a class="dl-btn" id="dl-png" href="#" download="qr_code.png">↓ Download PNG</a>
+        <a class="dl-btn" id="dl-jpg" href="#" download="qr_code.jpg">↓ Download JPEG</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── Colour pickers → hex label sync ──────────────────────────────────────
+  const fgPick = document.getElementById('fg-pick');
+  const bgPick = document.getElementById('bg-pick');
+  const fgHex  = document.getElementById('fg-hex');
+  const bgHex  = document.getElementById('bg-hex');
+  fgPick.addEventListener('input', () => fgHex.textContent = fgPick.value);
+  bgPick.addEventListener('input', () => bgHex.textContent = bgPick.value);
+
+  // ── Size slider ───────────────────────────────────────────────────────────
+  const sizeRange = document.getElementById('size-range');
+  const sizeVal   = document.getElementById('size-val');
+  const sizeLabel = document.getElementById('size-label');
+  sizeRange.addEventListener('input', () => {
+    sizeVal.textContent = sizeRange.value;
+    sizeLabel.textContent = sizeRange.value;
+  });
+
+  // ── Animation style ───────────────────────────────────────────────────────
+  const animStyle  = document.getElementById('anim-style');
+  const qr3dInner  = document.getElementById('qr-3d-inner');
+
+  const animCSS = {
+    float: `
+      @keyframes qranim {
+        0%,100% { transform: rotateX(12deg) rotateY(-10deg) translateY(0); }
+        50%      { transform: rotateX(7deg)  rotateY(10deg)  translateY(-12px); }
+      }`,
+    spin: `
+      @keyframes qranim {
+        0%   { transform: rotateX(10deg) rotateY(0deg); }
+        100% { transform: rotateX(10deg) rotateY(360deg); }
+      }`,
+    pulse: `
+      @keyframes qranim {
+        0%,100% { transform: rotateX(8deg) rotateY(-6deg) scale(1); }
+        50%      { transform: rotateX(8deg) rotateY(-6deg) scale(1.06); }
+      }`,
+    none: `@keyframes qranim { 0%,100% { transform: rotateX(8deg) rotateY(-8deg); } }`,
+  };
+  let animEl = document.createElement('style');
+  document.head.appendChild(animEl);
+
+  function applyAnim(mode) {
+    animEl.textContent = animCSS[mode] || animCSS.float;
+    const dur = mode === 'spin' ? '8s' : mode === 'pulse' ? '3s' : '6s';
+    qr3dInner.style.animation = `qranim ${dur} ease-in-out infinite`;
+  }
+  applyAnim('float');
+  animStyle.addEventListener('change', () => applyAnim(animStyle.value));
+
+  // ── QR generation ─────────────────────────────────────────────────────────
+  let qrInstance = null;
+
+  document.getElementById('gen-btn').addEventListener('click', () => {
+    const url    = document.getElementById('url-input').value.trim();
+    const urlErr = document.getElementById('url-err');
+
+    if (!url) { urlErr.classList.add('show'); return; }
+    urlErr.classList.remove('show');
+
+    const fg      = fgPick.value;
+    const bg      = bgPick.value;
+    const size    = parseInt(sizeRange.value);
+    const ecLevel = document.getElementById('ec-level').value;
+
+    const spinner = document.getElementById('spinner');
+    spinner.classList.add('show');
+
+    const renderEl = document.getElementById('qr-render');
+    renderEl.innerHTML = '';
+
+    if (qrInstance) { try { qrInstance.clear(); } catch(e){} }
+
+    const ecMap = { L: QRCode.CorrectLevel.L, M: QRCode.CorrectLevel.M, Q: QRCode.CorrectLevel.Q, H: QRCode.CorrectLevel.H };
+
+    setTimeout(() => {
+      qrInstance = new QRCode(renderEl, {
+        text: url,
+        width: size,
+        height: size,
+        colorDark: fg,
+        colorLight: bg,
+        correctLevel: ecMap[ecLevel] ?? QRCode.CorrectLevel.H,
+      });
+
+      applyAnim(animStyle.value);
+
+      // give QRCode.js a tick to write the canvas
+      setTimeout(() => {
+        spinner.classList.remove('show');
+        document.getElementById('output-section').style.display = 'block';
+        document.getElementById('qr-box').style.background = bg;
+
+        // Build download links after canvas is ready
+        buildDownloadLinks(bg);
+      }, 200);
+    }, 50);
+  });
+
+  function buildDownloadLinks(bgColor) {
+    const canvas = document.querySelector('#qr-render canvas');
+    if (!canvas) return;
+
+    // PNG download
+    const pngUrl = canvas.toDataURL('image/png');
+    const dlPng  = document.getElementById('dl-png');
+    dlPng.href = pngUrl;
+    dlPng.download = 'qr_code.png';
+
+    // JPEG: need white/opaque background
+    const jpgCanvas = document.createElement('canvas');
+    jpgCanvas.width  = canvas.width;
+    jpgCanvas.height = canvas.height;
+    const ctx = jpgCanvas.getContext('2d');
+    ctx.fillStyle = bgColor || '#ffffff';
+    ctx.fillRect(0, 0, jpgCanvas.width, jpgCanvas.height);
+    ctx.drawImage(canvas, 0, 0);
+
+    const jpgUrl = jpgCanvas.toDataURL('image/jpeg', 0.95);
+    const dlJpg  = document.getElementById('dl-jpg');
+    dlJpg.href = jpgUrl;
+    dlJpg.download = 'qr_code.jpg';
+  }
+</script>
+</body>
+</html>
